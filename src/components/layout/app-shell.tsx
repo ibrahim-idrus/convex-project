@@ -16,6 +16,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/features/auth/auth-context'
+import { useDashboardData } from '@/hooks/use-dashboard-data'
 import { cn } from '@/lib/utils'
 import type { RoleName } from '@/types/domain'
 import { hasPermission, type Permission } from '@/types/rbac'
@@ -48,8 +49,41 @@ function roleLabel(role: RoleName) {
     .join(' ')
 }
 
+function formatDate(date: Date) {
+  return date.toLocaleDateString(undefined, {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  })
+}
+
+function weekOfYear(date: Date) {
+  const firstDay = new Date(date.getFullYear(), 0, 1)
+  const dayOfYear = Math.floor((date.getTime() - firstDay.getTime()) / 86400000) + 1
+  return Math.ceil((dayOfYear + firstDay.getDay()) / 7)
+}
+
+type TermSummary = {
+  termName: string
+  weekInTerm: number
+  weekInYear: number
+  endDateLabel: string
+  todayLabel: string
+}
+
+type TimelineItem = {
+  id: string
+  day: string
+  month: string
+  title: string
+  subtitle: string
+  dueLabel: string
+  status: string
+}
+
 export function AppShell() {
   const { user, logout, switchRole } = useAuth()
+  const dashboardQuery = useDashboardData(user?.userId)
   const [isOpen, setIsOpen] = useState(false)
   const [profilePhoto, setProfilePhoto] = useState<string | null>(null)
 
@@ -75,11 +109,63 @@ export function AppShell() {
 
   if (!user) return null
 
+  const semesters = dashboardQuery.data?.semesters ?? []
+  const activeSemester = semesters.find((semester) => semester.isActive) ?? semesters[0]
+  const termSummary: TermSummary | null = activeSemester
+    ? (() => {
+        const now = new Date()
+        const start = new Date(activeSemester.createdAt)
+        const end = new Date(start.getTime() + 16 * 7 * 86400000)
+        const weekInTerm = Math.max(
+          1,
+          Math.min(16, Math.floor((now.getTime() - start.getTime()) / (7 * 86400000)) + 1),
+        )
+
+        return {
+          termName: `${activeSemester.name} ${activeSemester.academicYear}`,
+          weekInTerm,
+          weekInYear: weekOfYear(now),
+          endDateLabel: formatDate(end),
+          todayLabel: formatDate(now),
+        }
+      })()
+    : null
+
+  const semesterMap = new Map(
+    (dashboardQuery.data?.semesters ?? []).map((semester) => [semester._id, `${semester.name} ${semester.academicYear}`]),
+  )
+  const userMap = new Map((dashboardQuery.data?.users ?? []).map((entry) => [entry._id, entry.fullName]))
+  const isStudent = user.roles.includes('student')
+  const canViewCampusPaymentTimeline =
+    user.roles.includes('campus_admin') || user.roles.includes('super_admin') || user.roles.includes('finance')
+  const timelineItems: TimelineItem[] = (dashboardQuery.data?.payments ?? [])
+    .filter((payment) => payment.status !== 'paid')
+    .filter((payment) => (isStudent ? payment.studentId === user.userId : canViewCampusPaymentTimeline))
+    .sort((a, b) => (a.createdAt + 30 * 86400000) - (b.createdAt + 30 * 86400000))
+    .slice(0, 6)
+    .map((payment) => {
+      const dueDate = new Date(payment.createdAt + 30 * 86400000)
+      return {
+        id: payment._id,
+        day: String(dueDate.getDate()).padStart(2, '0'),
+        month: dueDate.toLocaleDateString(undefined, { month: 'short' }),
+        title: isStudent ? 'Tenggat pembayaran semester kamu' : userMap.get(payment.studentId) ?? payment.studentId,
+        subtitle: semesterMap.get(payment.semesterId) ?? payment.semesterId,
+        dueLabel: formatDate(dueDate),
+        status: payment.status,
+      }
+    })
+
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_top_right,#e6eef9,#f5f8fc_60%)] p-3 lg:p-5">
       <div className="mx-auto grid min-h-[calc(100vh-1.5rem)] max-w-[1440px] grid-cols-1 gap-4 lg:grid-cols-[250px_minmax(0,1fr)]">
         <aside className="hidden rounded-3xl border border-[#d6dfec] bg-white p-5 shadow-[0_20px_40px_-30px_rgba(9,37,78,0.7)] lg:block">
-          <SidebarContent onNavigate={() => undefined} roles={user.roles} />
+          <SidebarContent
+            onNavigate={() => undefined}
+            roles={user.roles}
+            termSummary={termSummary}
+            timelineItems={timelineItems}
+          />
         </aside>
 
         <div className="rounded-3xl border border-[#d6dfec] bg-white shadow-[0_20px_40px_-30px_rgba(9,37,78,0.7)]">
@@ -145,7 +231,12 @@ export function AppShell() {
                 <X className="size-5" />
               </Button>
             </div>
-            <SidebarContent onNavigate={() => setIsOpen(false)} roles={user.roles} />
+            <SidebarContent
+              onNavigate={() => setIsOpen(false)}
+              roles={user.roles}
+              termSummary={termSummary}
+              timelineItems={timelineItems}
+            />
             <Button variant="outline" className="mt-4 w-full" onClick={logout}>
               Logout
             </Button>
@@ -159,9 +250,13 @@ export function AppShell() {
 function SidebarContent({
   onNavigate,
   roles,
+  termSummary,
+  timelineItems,
 }: {
   onNavigate: () => void
   roles: RoleName[]
+  termSummary: TermSummary | null
+  timelineItems: TimelineItem[]
 }) {
   const visibleMenu = menuItems.filter((item) => {
     if (!item.permissions || item.permissions.length === 0) return true
@@ -201,15 +296,44 @@ function SidebarContent({
 
       <div className="mt-8 rounded-xl border border-[#dce5f1] bg-[#f5f8fd] p-3">
         <p className="text-xs font-semibold tracking-wide text-[#5f7391]">Current Term</p>
-        <p className="mt-1 text-sm font-bold text-[#102f5f]">Fall 2026/2027</p>
-        <p className="text-xs text-[#6d819f]">Week 9 of 16</p>
+        {termSummary ? (
+          <>
+            <p className="mt-1 text-sm font-bold text-[#102f5f]">{termSummary.termName}</p>
+            <p className="text-xs text-[#6d819f]">Minggu {termSummary.weekInTerm} dari 16</p>
+            <p className="text-xs text-[#6d819f]">Minggu kalender: {termSummary.weekInYear}</p>
+            <p className="text-xs text-[#6d819f]">Akhir semester: {termSummary.endDateLabel}</p>
+            <p className="text-xs text-[#6d819f]">Hari ini: {termSummary.todayLabel}</p>
+          </>
+        ) : (
+          <p className="mt-1 text-xs text-[#6d819f]">Semester aktif belum tersedia.</p>
+        )}
       </div>
 
       <div className="mt-3 rounded-xl border border-[#dce5f1] bg-[#f5f8fd] p-3 text-xs text-[#5f7391]">
         <div className="mb-1 flex items-center gap-2 font-semibold">
           <Calendar className="size-4" /> Timeline
         </div>
-        <p>Target delivery: 1 month</p>
+        {timelineItems.length === 0 ? (
+          <p>Tidak ada tenggat pembayaran terdekat.</p>
+        ) : (
+          <div className="space-y-2">
+            {timelineItems.map((item) => (
+              <div key={item.id} className="flex gap-2 rounded-lg border border-[#dce5f1] bg-white p-2">
+                <div className="min-w-11 rounded-md border border-[#dce5f1] bg-[#f8fbff] px-1 py-1 text-center">
+                  <p className="text-[10px] font-semibold uppercase text-[#5f7391]">{item.month}</p>
+                  <p className="text-sm font-black text-[#12335e]">{item.day}</p>
+                </div>
+                <div className="min-w-0">
+                  <p className="truncate text-[11px] font-semibold text-[#12335e]">{item.title}</p>
+                  <p className="truncate text-[11px] text-[#5f7391]">{item.subtitle}</p>
+                  <p className="text-[11px] text-[#5f7391]">
+                    Tenggat: {item.dueLabel} ({item.status})
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </>
   )

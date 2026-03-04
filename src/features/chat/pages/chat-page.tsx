@@ -1,27 +1,41 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { useAuth } from '@/features/auth/auth-context'
-import { sendMessage, subscribeMessages } from '@/lib/mock-api'
+import { getConversationPeerByMessage, sendMessage, subscribeMessages } from '@/lib/mock-api'
 import { useDashboardData } from '@/hooks/use-dashboard-data'
 
 export function ChatPage() {
   const { user } = useAuth()
+  const [searchParams] = useSearchParams()
   const queryClient = useQueryClient()
   const dashboard = useDashboardData(user?.userId)
   const messageContainerRef = useRef<HTMLDivElement>(null)
 
   const [peerUserId, setPeerUserId] = useState<string>('')
   const [message, setMessage] = useState('')
+  const notificationMessageId = searchParams.get('messageId') ?? ''
 
   const users = useMemo(() => {
     if (!dashboard.data || !user) return []
     return dashboard.data.users.filter((entry) => entry._id !== user.userId)
   }, [dashboard.data, user])
 
-  const activePeerUserId = peerUserId || users[0]?._id || ''
+  const conversationPeerQuery = useQuery({
+    queryKey: ['chat-message-peer', user?.userId, notificationMessageId],
+    queryFn: () =>
+      getConversationPeerByMessage({
+        actorUserId: user?.userId ?? '',
+        messageId: notificationMessageId,
+      }),
+    enabled: !!user && !!notificationMessageId,
+    staleTime: 60_000,
+  })
+
+  const activePeerUserId = peerUserId || conversationPeerQuery.data?.peerUserId || users[0]?._id || ''
 
   const messagesQuery = useQuery({
     queryKey: ['messages', user?.userId, activePeerUserId],

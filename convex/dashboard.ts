@@ -1,4 +1,5 @@
 import { v } from 'convex/values'
+import type { Id } from './_generated/dataModel'
 import { query } from './_generated/server'
 import { getUserRoles, requirePermission } from './lib/rbac'
 
@@ -65,7 +66,7 @@ export const getDashboardData = query({
       semesters,
       announcements,
       notifications,
-      documents,
+      rawDocuments,
       allEnrollments,
       allPayments,
       allScholarships,
@@ -178,6 +179,24 @@ export const getDashboardData = query({
       ),
     )
     const materials = materialsBySubject.flat()
+    const documents = await Promise.all(
+      rawDocuments.map(async (document) => {
+        if (!document.fileUrl.startsWith('storage:')) {
+          return {
+            ...document,
+            sourceType: 'external_link' as const,
+          }
+        }
+
+        const storageId = document.fileUrl.slice('storage:'.length) as Id<'_storage'>
+        const resolvedUrl = await ctx.storage.getUrl(storageId)
+        return {
+          ...document,
+          fileUrl: resolvedUrl ?? '',
+          sourceType: 'uploaded_file' as const,
+        }
+      }),
+    )
 
     const auditLogs = (await ctx.db.query('audit_logs').withIndex('by_timestamp').order('desc').take(200)).filter(
       (entry) => campusUserIds.includes(entry.userId) || entry.userId === args.actorUserId,

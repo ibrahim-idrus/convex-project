@@ -101,7 +101,7 @@ export function LoginPage() {
 
           <div className="mt-5 rounded-xl bg-[#f2f6fc] p-3 text-xs text-[#4f6788]">
             <p className="font-semibold">Demo credentials:</p>
-            <p>super@educentral.dev / admi      n123</p>
+            <p>super@educentral.dev / admi        n123</p>
             <p>campusadmin@educentral.dev / admin123</p>
             <p>lecturer@educentral.dev / admin123</p>
             <p>student@educentral.dev / admin123</p>

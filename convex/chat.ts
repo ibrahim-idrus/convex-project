@@ -59,3 +59,22 @@ export const subscribeMessages = query({
     return [...sent, ...received].sort((a, b) => a.createdAt - b.createdAt)
   },
 })
+
+export const getConversationPeerByMessage = query({
+  args: {
+    actorUserId: v.id('users'),
+    messageId: v.id('chat_messages'),
+  },
+  handler: async (ctx, args) => {
+    const message = await ctx.db.get(args.messageId)
+    if (!message) throw new Error('MESSAGE_NOT_FOUND')
+
+    if (message.senderId !== args.actorUserId && message.receiverId !== args.actorUserId) {
+      throw new Error('FORBIDDEN_MESSAGE_SCOPE')
+    }
+
+    return {
+      peerUserId: message.senderId === args.actorUserId ? message.receiverId : message.senderId,
+    }
+  },
+})

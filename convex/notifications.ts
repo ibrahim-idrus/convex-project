@@ -30,9 +30,7 @@ export const markAsRead = mutation({
       throw new Error('FORBIDDEN_NOTIFICATION_SCOPE')
     }
 
-    await ctx.db.patch(args.notificationId, {
-      isRead: true,
-    })
+    await ctx.db.delete(args.notificationId)
   },
 })
 

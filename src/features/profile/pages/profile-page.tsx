@@ -1,13 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { Building2, ImagePlus, Mail, MapPin, Phone, Search, Trash2, UserRound } from 'lucide-react'
+import { Building2, ImagePlus, Mail, MapPin, Phone, Trash2, UserRound } from 'lucide-react'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
 import { useAuth } from '@/features/auth/auth-context'
-import { useDashboardData } from '@/hooks/use-dashboard-data'
 import { getRegisterMetadata } from '@/lib/mock-api'
 import type { RoleName } from '@/types/domain'
 
@@ -44,13 +42,11 @@ function departmentByRole(role: RoleName) {
 
 export function ProfilePage() {
   const { user } = useAuth()
-  const dashboardQuery = useDashboardData(user?.userId)
   const registerMetadataQuery = useQuery({
     queryKey: ['register-metadata'],
     queryFn: getRegisterMetadata,
   })
 
-  const [studentKeyword, setStudentKeyword] = useState('')
   const [photoDataUrl, setPhotoDataUrl] = useState<string | null>(null)
   const [photoError, setPhotoError] = useState<string | null>(null)
   const photoInputRef = useRef<HTMLInputElement>(null)
@@ -66,29 +62,17 @@ export function ProfilePage() {
   if (!user) return null
   const currentUser = user
 
-  if (dashboardQuery.isLoading) {
+  if (registerMetadataQuery.isLoading) {
     return <p className="text-sm text-[#5f7594]">Loading profile...</p>
   }
 
-  if (dashboardQuery.error || !dashboardQuery.data) {
+  if (registerMetadataQuery.error || !registerMetadataQuery.data) {
     return <p className="text-sm text-red-600">Unable to load profile data.</p>
   }
 
   const campusMap = new Map(
     (registerMetadataQuery.data?.campuses ?? []).map((campus) => [campus._id, campus.name] as const),
   )
-  const students = dashboardQuery.data.users.filter(
-    (entry) => dashboardQuery.data.userRoleMap[entry._id]?.includes('student'),
-  )
-
-  const loweredKeyword = studentKeyword.trim().toLowerCase()
-  const filteredStudents = loweredKeyword
-    ? students.filter(
-        (student) =>
-          student.fullName.toLowerCase().includes(loweredKeyword) ||
-          student.email.toLowerCase().includes(loweredKeyword),
-      )
-    : students
 
   const detailRows = [
     {
@@ -164,7 +148,7 @@ export function ProfilePage() {
     <div className="space-y-6">
       <section className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
         <Card className="rounded-[28px] border-[#d7e2ef] p-6">
-          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#6f86a4]">Student Profile</p>
+          <p className="text-sm font-semibold uppercase tracking-[0.2em] text-[#6f86a4]">User Profile</p>
 
           <div className="relative mx-auto mt-5 w-fit">
             <Avatar className="size-52 border-4 border-white shadow-[0_20px_45px_-28px_rgba(10,39,82,0.8)]">
@@ -235,66 +219,6 @@ export function ProfilePage() {
           </div>
         </Card>
       </section>
-
-      <Card className="rounded-[28px] border-[#d7e2ef] p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-2xl font-black text-[#102543]">Data Murid Terdaftar</h2>
-            <p className="text-sm text-[#637d9d]">
-              Menampilkan data murid yang sudah dibuat saat register sebelumnya.
-            </p>
-          </div>
-          <Badge variant="secondary">{filteredStudents.length} Murid</Badge>
-        </div>
-
-        <div className="mt-4 max-w-xl">
-          <div className="relative">
-            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#6f86a4]" />
-            <Input
-              value={studentKeyword}
-              onChange={(event) => setStudentKeyword(event.target.value)}
-              placeholder="Cari nama atau email murid..."
-              className="pl-9"
-            />
-          </div>
-        </div>
-
-        <div className="mt-5 overflow-x-auto rounded-2xl border border-[#e2eaf4]">
-          <table className="min-w-full text-sm">
-            <thead className="bg-[#f4f8fd] text-left text-[#607896]">
-              <tr>
-                <th className="px-3 py-3">No</th>
-                <th className="px-3 py-3">Nama Murid</th>
-                <th className="px-3 py-3">Email</th>
-                <th className="px-3 py-3">Campus</th>
-                <th className="px-3 py-3">Role</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredStudents.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="px-3 py-5 text-center text-[#7088a6]">
-                    Tidak ada data murid yang cocok.
-                  </td>
-                </tr>
-              )}
-              {filteredStudents.map((student, index) => (
-                <tr key={student._id} className="border-t border-[#e7edf6] text-[#17385f]">
-                  <td className="px-3 py-3">{index + 1}</td>
-                  <td className="px-3 py-3 font-semibold">{student.fullName}</td>
-                  <td className="px-3 py-3">{student.email}</td>
-                  <td className="px-3 py-3">{campusMap.get(student.campusId) ?? student.campusId}</td>
-                  <td className="px-3 py-3">
-                    <Badge variant="outline">
-                      {dashboardQuery.data.userRoleMap[student._id]?.join(', ') ?? 'student'}
-                    </Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </Card>
     </div>
   )
 }

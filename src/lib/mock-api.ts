@@ -327,6 +327,12 @@ export async function uploadDocument(input: {
   })
 }
 
+export async function generateDocumentUploadUrl(input: { actorUserId: string }) {
+  return runMutation<string>('admin:generateDocumentUploadUrl', {
+    actorUserId: input.actorUserId,
+  })
+}
+
 export async function sendMessage(input: {
   actorUserId: string
   receiverId: string
@@ -348,6 +354,13 @@ export async function subscribeMessages(input: { actorUserId: string; peerUserId
   })
 }
 
+export async function getConversationPeerByMessage(input: { actorUserId: string; messageId: string }) {
+  return runQuery<{ peerUserId: string }>('chat:getConversationPeerByMessage', {
+    actorUserId: input.actorUserId,
+    messageId: input.messageId,
+  })
+}
+
 export async function markAsRead(input: { actorUserId: string; notificationId: string }) {
   return runMutation('notifications:markAsRead', {
     actorUserId: input.actorUserId,
@@ -364,17 +377,42 @@ export async function getDashboardData(input: { actorUserId: string }) {
       pendingPayments: number
     }
     announcements: Array<{ _id: string; title: string; content: string; campusId: string; createdBy: string; createdAt: number }>
-    payments: Array<{ _id: string; studentId: string; semesterId: string; amount: number; status: PaymentStatus; invoiceNumber: string }>
+    payments: Array<{
+      _id: string
+      studentId: string
+      semesterId: string
+      amount: number
+      status: PaymentStatus
+      invoiceNumber: string
+      createdAt: number
+      updatedAt: number
+    }>
     grades: Array<{ _id: string; enrollmentId: string; gradeValue: string; locked: boolean }>
     attendance: Array<{ _id: string; enrollmentId: string; date: number; status: 'present' | 'absent' | 'late' }>
     enrollments: Array<{ _id: string; studentId: string; subjectId: string; semesterId: string }>
     scholarships: Array<{ _id: string; studentId: string; percentage: number; semesterId: string }>
-    semesters: Array<{ _id: string; name: string; academicYear: string; isActive: boolean; isClosed: boolean; campusId: string }>
+    semesters: Array<{
+      _id: string
+      name: string
+      academicYear: string
+      isActive: boolean
+      isClosed: boolean
+      campusId: string
+      createdAt: number
+    }>
     subjects: Array<{ _id: string; name: string; credits: number; lecturerId: string; campusId: string }>
     users: Array<{ _id: string; email: string; fullName: string; campusId: string }>
     userRoleMap: Record<string, string[]>
     materials: Array<{ _id: string; subjectId: string; uploadedBy: string; title: string; fileUrl: string; createdAt: number }>
-    documents: Array<{ _id: string; campusId: string; uploadedBy: string; title: string; fileUrl: string; createdAt: number }>
+    documents: Array<{
+      _id: string
+      campusId: string
+      uploadedBy: string
+      title: string
+      fileUrl: string
+      createdAt: number
+      sourceType?: 'uploaded_file' | 'external_link'
+    }>
     notifications: Array<{ _id: string; userId: string; type: string; referenceId: string; isRead: boolean; createdAt: number }>
     auditLogs: Array<{ _id: string; userId: string; action: string; targetType: string; targetId: string; timestamp: number }>
     studentProfile: {
@@ -389,7 +427,16 @@ export async function getDashboardData(input: { actorUserId: string }) {
       cumulativeGpa: number
       attendancePercentage: number
       attendanceHistory: Array<{ _id: string; enrollmentId: string; date: number; status: 'present' | 'absent' | 'late' }>
-      tuitionPayments: Array<{ _id: string; studentId: string; semesterId: string; amount: number; status: PaymentStatus; invoiceNumber: string }>
+      tuitionPayments: Array<{
+        _id: string
+        studentId: string
+        semesterId: string
+        amount: number
+        status: PaymentStatus
+        invoiceNumber: string
+        createdAt: number
+        updatedAt: number
+      }>
       scholarships: Array<{ _id: string; studentId: string; percentage: number; semesterId: string }>
     }
     unreadNotificationCount: number

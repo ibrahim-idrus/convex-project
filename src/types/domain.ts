@@ -25,6 +25,7 @@ export interface Semester {
   isActive: boolean
   campusId: string
   isClosed: boolean
+  createdAt: number
 }
 
 export interface Subject {
@@ -63,6 +64,8 @@ export interface Payment {
   amount: number
   status: PaymentStatus
   invoiceNumber: string
+  createdAt: number
+  updatedAt: number
 }
 
 export interface Scholarship {

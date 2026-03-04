@@ -108,6 +108,16 @@ export const uploadDocument = mutation({
   },
 })
 
+export const generateDocumentUploadUrl = mutation({
+  args: {
+    actorUserId: v.id('users'),
+  },
+  handler: async (ctx, args) => {
+    await requirePermission(ctx, args.actorUserId, 'manage:announcements')
+    return ctx.storage.generateUploadUrl()
+  },
+})
+
 export const listDocumentsByCampus = query({
   args: {
     actorUserId: v.id('users'),

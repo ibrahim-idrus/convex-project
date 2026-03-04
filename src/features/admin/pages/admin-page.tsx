@@ -12,6 +12,7 @@ import { useDashboardData } from '@/hooks/use-dashboard-data'
 import {
   assignRole,
   createAnnouncement,
+  generateDocumentUploadUrl,
   searchStudents,
   searchSubjects,
   uploadDocument,
@@ -30,7 +31,7 @@ const announcementSchema = z.object({
 
 const documentSchema = z.object({
   title: z.string().min(3),
-  fileUrl: z.string().url('Masukkan URL dokumen yang valid'),
+  fileUrl: z.string().optional(),
 })
 
 export function AdminPage() {
@@ -40,6 +41,7 @@ export function AdminPage() {
 
   const [studentKeyword, setStudentKeyword] = useState('')
   const [subjectKeyword, setSubjectKeyword] = useState('')
+  const [selectedDocumentFile, setSelectedDocumentFile] = useState<File | null>(null)
 
   const roleForm = useForm<z.infer<typeof roleSchema>>({
     resolver: zodResolver(roleSchema),
@@ -121,15 +123,53 @@ export function AdminPage() {
   })
 
   const documentMutation = useMutation({
-    mutationFn: (values: z.infer<typeof documentSchema>) =>
-      uploadDocument({
+    mutationFn: async (values: z.infer<typeof documentSchema>) => {
+      const externalUrl = values.fileUrl?.trim() ?? ''
+      let finalFileUrl = externalUrl
+
+      if (externalUrl && !z.string().url().safeParse(externalUrl).success) {
+        throw new Error('Masukkan URL dokumen yang valid')
+      }
+
+      if (selectedDocumentFile) {
+        const uploadUrl = await generateDocumentUploadUrl({
+          actorUserId: user?.userId ?? '',
+        })
+
+        const uploadResponse = await fetch(uploadUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': selectedDocumentFile.type || 'application/octet-stream',
+          },
+          body: selectedDocumentFile,
+        })
+
+        if (!uploadResponse.ok) {
+          throw new Error('Upload file gagal. Coba lagi.')
+        }
+
+        const uploadResult = (await uploadResponse.json()) as { storageId?: string }
+        if (!uploadResult.storageId) {
+          throw new Error('Upload file gagal. Storage ID tidak ditemukan.')
+        }
+
+        finalFileUrl = `storage:${uploadResult.storageId}`
+      }
+
+      if (!finalFileUrl) {
+        throw new Error('Isi URL dokumen atau pilih file dari penyimpanan.')
+      }
+
+      return uploadDocument({
         actorUserId: user?.userId ?? '',
         campusId: user?.campusId ?? '',
         title: values.title,
-        fileUrl: values.fileUrl,
-      }),
+        fileUrl: finalFileUrl,
+      })
+    },
     onSuccess: async () => {
       documentForm.reset({ title: '', fileUrl: '' })
+      setSelectedDocumentFile(null)
       await refresh()
     },
   })
@@ -234,18 +274,51 @@ export function AdminPage() {
           <h3 className="mb-3 text-base font-extrabold text-[#102f5f]">Campus Document Upload</h3>
           <form className="space-y-2" onSubmit={documentForm.handleSubmit((values) => documentMutation.mutate(values))}>
             <Input placeholder="Document title" {...documentForm.register('title')} />
-            <Input placeholder="Document URL" {...documentForm.register('fileUrl')} />
+            <Input placeholder="Document URL (opsional)" {...documentForm.register('fileUrl')} />
+            <div className="rounded-xl border border-dashed border-[#d5deeb] bg-[#f7faff] p-3">
+              <input
+                type="file"
+                onChange={(event) => setSelectedDocumentFile(event.target.files?.[0] ?? null)}
+                className="block w-full text-sm text-[#16345f]"
+              />
+              <p className="mt-2 text-xs text-[#6f849f]">
+                Boleh pakai URL online, atau pilih file dari penyimpanan perangkat.
+              </p>
+              {selectedDocumentFile && (
+                <p className="mt-1 text-xs font-semibold text-[#16345f]">
+                  File dipilih: {selectedDocumentFile.name} ({Math.ceil(selectedDocumentFile.size / 1024)} KB)
+                </p>
+              )}
+            </div>
             <Button className="w-full" disabled={documentMutation.isPending}>
               Upload Document
             </Button>
           </form>
+          {documentMutation.isError && (
+            <p className="mt-2 text-sm text-red-600">{(documentMutation.error as Error).message}</p>
+          )}
           <div className="mt-3 space-y-2">
+            {documents.length === 0 && (
+              <p className="rounded-lg border border-[#e2e9f3] p-3 text-sm text-[#6f849f]">
+                Belum ada dokumen terupload.
+              </p>
+            )}
             {documents.map((doc) => (
-              <div key={doc._id} className="rounded-lg border border-[#e2e9f3] p-2 text-sm">
-                <p className="font-semibold text-[#16345f]">{doc.title}</p>
-                <a className="text-xs text-[#123d80] underline" href={doc.fileUrl} target="_blank" rel="noreferrer">
-                  {doc.fileUrl}
-                </a>
+              <div key={doc._id} className="rounded-lg border border-[#e2e9f3] bg-[#f7faff] p-3 text-sm">
+                <div className="flex items-start justify-between gap-2">
+                  <p className="font-semibold text-[#16345f]">{doc.title}</p>
+                  <Badge variant={doc.sourceType === 'uploaded_file' ? 'secondary' : 'outline'}>
+                    {doc.sourceType === 'uploaded_file' ? 'Uploaded File' : 'External Link'}
+                  </Badge>
+                </div>
+                <p className="mt-1 text-xs text-[#69809d]">Uploaded: {new Date(doc.createdAt).toLocaleString()}</p>
+                {doc.fileUrl ? (
+                  <a className="mt-2 inline-block text-xs text-[#123d80] underline" href={doc.fileUrl} target="_blank" rel="noreferrer">
+                    Buka Dokumen
+                  </a>
+                ) : (
+                  <p className="mt-2 text-xs text-[#a05b5b]">Link dokumen belum tersedia.</p>
+                )}
               </div>
             ))}
           </div>
